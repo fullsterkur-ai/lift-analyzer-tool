@@ -56,7 +56,12 @@ class GUI(tk.Tk):
         self.after(0, self._render_frame, frame)
 
     def _render_frame(self, frame: np.ndarray):
-        frame = cv2.resize(frame, (self.video_frame.winfo_width(), self.video_frame.winfo_height()))
+        frame_h, frame_w = frame.shape[:2]
+        window_w, window_h = (self.video_frame.winfo_width(), self.video_frame.winfo_height()) 
+        scale = min(window_w / frame_w, window_h / frame_h)
+        new_w, new_h = max(1, int(frame_w * scale)), max(1, int(frame_h * scale))
+
+        frame = cv2.resize(frame, (new_w, new_h))
         cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(cv2image)
         imgtk = ImageTk.PhotoImage(image=img)
@@ -88,9 +93,7 @@ class GUI(tk.Tk):
 
     def _handle_record_video(self):
         if not self._is_recording:
-            video_src = VideoSource.from_camera(
-                (self.video_frame.winfo_width(), self.video_frame.winfo_height())
-            )
+            video_src = VideoSource.from_camera()
             self._is_recording = True
             self.record_video_button.config(text="Stop recording")
             self.upload_video_button.config(state="disabled")
@@ -110,10 +113,7 @@ class GUI(tk.Tk):
             ],
         )
         if filepath:
-            video_src = VideoSource.from_filepicker(
-                filepath,
-                (self.video_frame.winfo_width(), self.video_frame.winfo_height()),
-            )
+            video_src = VideoSource.from_filepicker(filepath)
             self._is_recording = True
             self.record_video_button.config(text="Stop recording")
             self.upload_video_button.config(state="disabled")
@@ -129,6 +129,7 @@ class GUI(tk.Tk):
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:
             return
+        self.video_source.reset_playback()
         self._is_playing = True
         self.play_pause_button.config(text="Stop")
         self.record_video_button.config(state="disabled")
@@ -145,7 +146,10 @@ class GUI(tk.Tk):
         frame, timestamp, next_timestamp = self.video_source.next()
         self._render_frame(frame)
 
-        delay_ms = max(1, min(int((next_timestamp - timestamp) / 1_000_000), 200))
+        if self.video_source.source_fps:
+            delay_ms = max(1, int(1000 / self.video_source.source_fps))
+        else:
+            delay_ms = max(1, min(int((next_timestamp - timestamp) / 1_000_000), 200))
         self._play_after_id = self.after(delay_ms, self._play_next_frame)
 
     def _stop_playback(self):

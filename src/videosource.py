@@ -20,15 +20,18 @@ class VideoCaptureListeners:
 
 class VideoSource:
 
-    def __init__(self, cap_source: str | PathLike[str] | int, target_dim: tuple[int, int]):
+    def __init__(self, cap_source: str | PathLike[str] | int):
         self.buffer = []
         self.buffer_timestamps = []
         self.cap = VideoCapture(cap_source)
         if not self.cap.isOpened():
             raise IOError(f"Cannot open video source: {cap_source}")
-        self.target_dim = target_dim
         self._stop_requested = False
         self.replay_idx = 0
+
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.is_file_source = not isinstance(cap_source, int)
+        self.source_fps = fps if (self.is_file_source and fps and fps > 0) else None
 
     @staticmethod
     def from_filepicker(filepath, *args, **kwargs):
@@ -56,6 +59,9 @@ class VideoSource:
 
         return curr_frame, curr_timestamp, next_timestamp
     
+    def reset_playback(self):
+        self.replay_idx = 0
+    
     def playback_is_empty(self):
         return self.replay_idx >= len(self.buffer)
 
@@ -70,7 +76,6 @@ class VideoSource:
 
             self.buffer.append(frame)
             self.buffer_timestamps.append(time.monotonic_ns())
-            frame = cv2.resize(frame, self.target_dim)
             if listeners and listeners.on_frame: listeners.on_frame(frame)
 
         self.cap.release()

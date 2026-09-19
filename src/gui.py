@@ -1,4 +1,5 @@
 import cv2
+import math
 import tkinter as tk
 import numpy as np
 import threading
@@ -62,6 +63,15 @@ class GUI(tk.Tk):
         new_w, new_h = max(1, int(frame_w * scale)), max(1, int(frame_h * scale))
 
         frame = cv2.resize(frame, (new_w, new_h))
+        # apply padding
+        if new_w < window_w:
+            pad_w = math.floor((window_w - new_w) / 2)
+            padding = np.zeros((frame.shape[0], pad_w, frame.shape[2]), dtype=frame.dtype)
+            frame = np.hstack((padding, frame, padding))
+        if new_h < window_h:
+            pad_h = math.floor((window_h - new_h) / 2)
+            padding = np.zeros((pad_h, frame.shape[1], frame.shape[2]), dtype=frame.dtype)
+            frame = np.vstack((padding, frame, padding))
         cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(cv2image)
         imgtk = ImageTk.PhotoImage(image=img)

@@ -83,10 +83,8 @@ class MediaPipeEstimationStrategy(EstimationStrategy):
 
         self.canvas.draw()
 
-    def draw_estimations(self, frame, estimations):
+    def plot_landmarks(self, frame, estimations):
         landmarks = estimations
-
-        self.plot_world_landmarks(estimations)
         pose_landmarks_list = landmarks.pose_landmarks
         annotated_image = frame.copy()
 
@@ -102,5 +100,10 @@ class MediaPipeEstimationStrategy(EstimationStrategy):
               connection_drawing_spec=pose_connection_style)
 
         return annotated_image
-        
+
+    def draw_estimations(self, frame, estimations):
+
+        self.plot_world_landmarks(estimations)
+        return self.plot_landmarks(frame, estimations)
+
     

@@ -7,6 +7,7 @@ import threading
 from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
 from .videosource import VideoSource, VideoCaptureListeners
+from .strategies import EstimationStrategyManager, PoseEstimationStrategies
 
 class GUI(tk.Tk):
 
@@ -46,12 +47,23 @@ class GUI(tk.Tk):
         )
         self.play_pause_button.pack(fill="both", pady=1)
 
+        ttk.Label(self.ctrl_frame, text="Strategies").pack(pady=5, fill="x")
+
+        self.strategy_mediapipe_button = ttk.Button(
+            self.ctrl_frame, text="Estimate with MediaPipe", command=self._set_mediapipe_strategy, state="disabled" 
+        )
+        self.strategy_mediapipe_button.pack(fill="both", pady=1)
+
         self.video_source: VideoSource | None = None
         self._capture_thread: threading.Thread | None = None
 
         self._is_recording = False
         self._is_playing = False
         self._play_after_id: str | None = None
+        self._pose_strategy_manager = None
+
+    def register_pose_strategy_manager(self, manager: EstimationStrategyManager):
+        self._pose_strategy_manager = manager
 
     def _on_video_capture_frame(self, frame: np.ndarray):
         self.after(0, self._render_frame, frame)
@@ -100,6 +112,7 @@ class GUI(tk.Tk):
         self.upload_video_button.config(state="normal")
         if self.video_source and self.video_source.buffer:
             self.play_pause_button.config(state="normal")
+            self.strategy_mediapipe_button.config(state="normal")
 
     def _handle_record_video(self):
         if not self._is_recording:
@@ -108,6 +121,7 @@ class GUI(tk.Tk):
             self.record_video_button.config(text="Stop recording")
             self.upload_video_button.config(state="disabled")
             self.play_pause_button.config(state="disabled")
+            self.strategy_mediapipe_button.config(state="disabled")
             self._start_capture(video_src)
         else:
             # stop button pressed mid-recording
@@ -131,6 +145,8 @@ class GUI(tk.Tk):
             self._start_capture(video_src)
 
     def _handle_play_pause(self):
+        # remove any estimation strategy as we don't want that
+        self._pose_strategy_manager.remove_strategy()
         if self._is_playing:
             self._stop_playback()
         else:
@@ -154,6 +170,9 @@ class GUI(tk.Tk):
             return
         
         frame, timestamp, next_timestamp = self.video_source.next()
+        if self._pose_strategy_manager:
+            frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
+            frame = self._pose_strategy_manager.draw_estimation(frame, estimations)
         self._render_frame(frame)
 
         if self.video_source.source_fps:
@@ -170,6 +189,10 @@ class GUI(tk.Tk):
         if self._play_after_id is not None:
             self.after_cancel(self._play_after_id)
             self._play_after_id = None
+
+    def _set_mediapipe_strategy(self):
+        self._pose_strategy_manager.set_strategy(PoseEstimationStrategies.MEDIAPIPE)
+        self._start_playback()
 
     def destroy(self):
         self._stop_playback()

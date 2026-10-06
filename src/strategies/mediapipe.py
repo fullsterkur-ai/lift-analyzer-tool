@@ -12,6 +12,7 @@ from mediapipe.tasks.python.vision import PoseLandmarkerOptions, PoseLandmarker,
     RunningMode, drawing_utils, drawing_styles, PoseLandmarksConnections
 
 from . import EstimationStrategy
+from ..metrics.metrics_manager import MetricsManager
 
 # credits for guide
 # https://colab.sandbox.google.com/github/googlesamples/mediapipe/blob/main/examples/pose_landmarker/python/%5BMediaPipe_Python_Tasks%5D_Pose_Landmarker.ipynb
@@ -81,8 +82,6 @@ class MediaPipeEstimationStrategy(EstimationStrategy):
         self.ax.set_ylabel('Y')
         self.ax.set_zlabel('Z')
 
-        self.canvas.draw()
-
     def plot_landmarks(self, frame, estimations):
         landmarks = estimations
         pose_landmarks_list = landmarks.pose_landmarks
@@ -102,8 +101,13 @@ class MediaPipeEstimationStrategy(EstimationStrategy):
         return annotated_image
 
     def draw_estimations(self, frame, estimations):
+        metrics_manager = MetricsManager.get_metrics_for(self)
+
+        frame = self.plot_landmarks(frame, estimations)
+        frame = metrics_manager.draw_2d_center(frame, estimations)
 
         self.plot_world_landmarks(estimations)
-        return self.plot_landmarks(frame, estimations)
+        metrics_manager.draw_3d_center(frame, estimations, self.ax)
+        self.canvas.draw()
 
-    
+        return frame

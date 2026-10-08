@@ -1,7 +1,6 @@
 import os
 import cv2
 import mediapipe as mp
-import matplotlib.pyplot as plt
 import tkinter as tk
 
 from pathlib import Path

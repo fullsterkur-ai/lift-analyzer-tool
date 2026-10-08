@@ -22,3 +22,15 @@ class BaseMetrics(ABC):
     @abstractmethod
     def draw_3d_center(self, frame: np.ndarray, estimations, *args, **kwargs):
         ...
+
+    @abstractmethod
+    def get_metrics(self, frame: np.ndarray, estimations, *args, **kwargs):
+        ...
+
+    @abstractmethod
+    def plot_metrics(self, *args, **kwargs):
+        ...
+
+    @abstractmethod
+    def reset_metrics(self):
+        ...

@@ -8,6 +8,7 @@ from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
 from .videosource import VideoSource, VideoCaptureListeners
 from .strategies import EstimationStrategyManager, PoseEstimationStrategies
+from .metrics.metrics_manager import MetricsManager
 
 class GUI(tk.Tk):
 
@@ -155,6 +156,10 @@ class GUI(tk.Tk):
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:
             return
+        
+        metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
+        metrics_manager.reset_metrics()
+
         self.video_source.reset_playback()
         self._is_playing = True
         self.play_pause_button.config(text="Stop")
@@ -169,9 +174,14 @@ class GUI(tk.Tk):
             self._stop_playback()
             return
         
+        metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
+        
         frame, timestamp, next_timestamp = self.video_source.next()
         if self._pose_strategy_manager:
             frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
+            history = metrics_manager.get_metrics(frame, estimations, timestamp)
+            metrics_manager.plot_metrics(history)
+
             frame = self._pose_strategy_manager.draw_estimation(frame, estimations)
         self._render_frame(frame)
 

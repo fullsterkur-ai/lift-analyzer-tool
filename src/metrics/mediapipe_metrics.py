@@ -7,6 +7,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerResult
 from .base_metrics import BaseMetrics
 from ..utils.math import get_center, get_velocity, remove_jitters, smooth
+from ..utils.biomechanics import calculate_hip_angle, calculate_knee_angle, \
+    calculate_ankle_angle, calculate_elbow_angle, calculate_shoulder_angle, calculate_wrist_angle
 
 class MediapipeMetrics(BaseMetrics):
 
@@ -25,8 +27,10 @@ class MediapipeMetrics(BaseMetrics):
         self.window.title("Mediapipe metrics")
 
         self.fig = Figure(figsize=(6, 6))
-        self.ax_y = self.fig.add_subplot(211)
-        self.ax_vy = self.fig.add_subplot(212, sharex=self.ax_y)
+        self.ax_y = self.fig.add_subplot(221)
+        self.ax_vy = self.fig.add_subplot(222, sharex=self.ax_y)
+        self.ax_theta = self.fig.add_subplot(223)
+        self.ax_vtheta = self.fig.add_subplot(224)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.window)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.window.protocol("WM_DELETE_WINDOW", self._on_close_metrics_window)
@@ -67,18 +71,48 @@ class MediapipeMetrics(BaseMetrics):
         self.history["displacement"].append(center)
         self.history["timestamps"].append(timestamp)
 
+        self.history["angular_distances"]["hip"].append(calculate_hip_angle(estimations))
+        self.history["angular_distances"]["knee"].append(calculate_knee_angle(estimations))
+        self.history["angular_distances"]["ankle"].append(calculate_ankle_angle(estimations))
+        self.history["angular_distances"]["wrist"].append(calculate_wrist_angle(estimations))
+        self.history["angular_distances"]["elbow"].append(calculate_elbow_angle(estimations))
+        self.history["angular_distances"]["shoulder"].append(calculate_shoulder_angle(estimations))
+
+
         ts = np.asarray(self.history["timestamps"], dtype=float)
-        t = (ts - ts[0]) / 1_000_000_000.0  # Convert nanoseconds to seconds
+        t = (ts - ts[0]) / 1_000_000_000.0
 
         pos = np.asarray(self.history["displacement"])
-        y_raw = pos[:, 1] - pos[0, 1]
-        y = remove_jitters(y_raw)
 
-        return {
+        history = {
             "time": t,
-            "displacement": smooth(y),
-            "velocity": get_velocity(y, t),
+            "displacement": remove_jitters(smooth(pos[:, 1] - pos[0, 1])),
+            "angular_distances": {
+                "hip": remove_jitters(smooth(self.history["angular_distances"]["hip"])),
+                "knee": remove_jitters(smooth(self.history["angular_distances"]["knee"])),
+                "ankle": remove_jitters(smooth(self.history["angular_distances"]["ankle"])),
+                "wrist": remove_jitters(smooth(self.history["angular_distances"]["wrist"])),
+                "elbow": remove_jitters(smooth(self.history["angular_distances"]["elbow"])),
+                "shoulder": remove_jitters(smooth(self.history["angular_distances"]["shoulder"])),
+            }
         }
+        history["velocity"] = get_velocity(history["displacement"], t)
+        history["angular_velocities"] = {
+            "hip": get_velocity(history["angular_distances"]["hip"], t),
+            "knee": get_velocity(history["angular_distances"]["knee"], t),
+            "ankle": get_velocity(history["angular_distances"]["ankle"], t),
+            "wrist": get_velocity(history["angular_distances"]["wrist"], t),
+            "elbow": get_velocity(history["angular_distances"]["elbow"], t),
+            "shoulder": get_velocity(history["angular_distances"]["shoulder"], t),
+        }
+
+        return history
+
+    def _clear_plots(self):
+        self.ax_y.cla()
+        self.ax_vy.cla()
+        self.ax_theta.cla()
+        self.ax_vtheta.cla()
 
     def plot_metrics(self, metrics):
         if self.fig is None:
@@ -88,23 +122,59 @@ class MediapipeMetrics(BaseMetrics):
             return
 
         t = metrics["time"]
-        displacement = -metrics["displacement"]
-        velocity = -metrics["velocity"]
 
-        self.ax_y.cla()
-        self.ax_vy.cla()
-        self.ax_y.plot(t, displacement)
+        self._clear_plots()
+        self.ax_y.plot(t, -metrics["displacement"])
         self.ax_y.set_ylabel("Displacement (m)")
-        self.ax_vy.plot(t, velocity)
+
+        self.ax_vy.plot(t, -metrics["velocity"])
         self.ax_vy.axhline(0, color="gray", linewidth=0.5)
         self.ax_vy.set_ylabel("Velocity (m/s)")
         self.ax_vy.set_xlabel("Time (s)")
+
+        self.ax_theta.plot(t, metrics["angular_distances"]["hip"], label="Hip")
+        self.ax_theta.plot(t, metrics["angular_distances"]["knee"], label="Knee")
+        self.ax_theta.plot(t, metrics["angular_distances"]["ankle"], label="Ankle")
+        self.ax_theta.plot(t, metrics["angular_distances"]["wrist"], label="Wrist")
+        self.ax_theta.plot(t, metrics["angular_distances"]["elbow"], label="Elbow")
+        self.ax_theta.plot(t, metrics["angular_distances"]["shoulder"], label="Shoulder")
+        self.ax_theta.legend()
+        self.ax_theta.set_ylabel("Angle (deg)")
+        self.ax_theta.set_xlabel("Time (s)")
+
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["hip"], label="Hip")
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["knee"], label="Knee")
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["ankle"], label="Ankle")
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["wrist"], label="Wrist")
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["elbow"], label="Elbow")
+        self.ax_vtheta.plot(t, metrics["angular_velocities"]["shoulder"], label="Shoulder")
+        self.ax_vtheta.axhline(0, color="gray", linewidth=0.5)
+        self.ax_vtheta.legend()
+        self.ax_vtheta.set_ylabel("Angular velocity (deg/s)")
+        self.ax_vtheta.set_xlabel("Time (s)")
+
         self.fig.tight_layout()
         self.canvas.draw_idle()
 
     def reset_metrics(self):
         self.history = {
             "displacement": [],
+            "angular_distances": {
+                "hip": [],
+                "knee": [],
+                "ankle": [],
+                "wrist": [],
+                "elbow": [],
+                "shoulder": [],
+            },
             "timestamps": [],
-            "velocity": []
+            "velocity": [],
+            "angular_velocities": {
+                "hip": [],
+                "knee": [],
+                "ankle": [],
+                "wrist": [],
+                "elbow": [],
+                "shoulder": [],
+            }
         }

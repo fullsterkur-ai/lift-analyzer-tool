@@ -8,7 +8,8 @@ from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerResult
 from .base_metrics import BaseMetrics
 from ..utils.math import get_center, get_velocity, remove_jitters, smooth
 from ..utils.biomechanics import calculate_hip_angle, calculate_knee_angle, \
-    calculate_ankle_angle, calculate_elbow_angle, calculate_shoulder_angle, calculate_wrist_angle
+    calculate_ankle_angle, calculate_elbow_angle, calculate_shoulder_angle, calculate_wrist_angle, \
+    get_current_phase
 
 class MediapipeMetrics(BaseMetrics):
 
@@ -178,3 +179,15 @@ class MediapipeMetrics(BaseMetrics):
                 "shoulder": [],
             }
         }
+
+    def get_current_lifting_phase(self, metrics, exercise):
+        return get_current_phase(exercise, metrics)[-1]
+
+    def draw_current_lifting_phase(self, frame, phase):
+        colors = {
+            "other": (200, 200, 200),
+            "concentric": (80, 255, 80),
+            "eccentric": (80, 80, 255),
+            "static": (255, 170, 60),
+        }
+        cv2.putText(frame, phase, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, colors[phase], 2)

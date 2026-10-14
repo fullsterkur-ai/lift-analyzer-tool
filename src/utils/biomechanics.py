@@ -1,3 +1,4 @@
+import numpy as np
 from enum import IntEnum
 from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerResult
 
@@ -38,6 +39,36 @@ class Landmark(IntEnum):
     LEFT_FOOT_INDEX = 31
     RIGHT_FOOT_INDEX = 32
 
+PHASE_MAP = {
+    "squat":                ("knee",     "increasing"),
+    "leg extension":        ("knee",     "increasing"),
+    "deadlift":             ("hip",      "increasing"),
+    "romanian deadlift":    ("hip",      "increasing"),
+    "hip thrust":           ("hip",      "increasing"),
+    "leg raises":           ("hip",      "decreasing"),
+    "push up":              ("elbow",    "increasing"),
+    "bench press":          ("elbow",    "increasing"),
+    "incline bench press":  ("elbow",    "increasing"),
+    "decline bench press":  ("elbow",    "increasing"),
+    "shoulder press":       ("elbow",    "increasing"),
+    "tricep dips":          ("elbow",    "increasing"),
+    "tricep pushdown":      ("elbow",    "increasing"),
+    "barbell biceps curl":  ("elbow",    "decreasing"),
+    "hammer curl":          ("elbow",    "decreasing"),
+    "lat pulldown":         ("elbow",    "decreasing"),
+    "pull up":              ("elbow",    "decreasing"),
+    "t bar row":            ("elbow",    "decreasing"),
+    "lateral raise":        ("shoulder", "increasing"),
+}
+
+OTHER, ECCENTRIC, CONCENTRIC, STATIC = 0, 1, 2, 3
+PHASE_NAMES = ["other", "eccentric", "concentric", "static"]
+
+STILL_FRAC = 0.15     # |velocity| below this fraction of the peak counts as "not moving"
+LOCKOUT_ZONE = 0.15   # "at the lockout end" = within this fraction of the video's range of motion
+MIN_LEN = 3           # runs shorter than this many frames get absorbed into the previous phase
+
+
 def calculate_body_angle(estimations: PoseLandmarkerResult, left_landmark_locations: list[Landmark]):
     landmarks = estimations.pose_world_landmarks[0]
     if not landmarks:
@@ -74,3 +105,41 @@ def calculate_elbow_angle(estimations: PoseLandmarkerResult):
 
 def calculate_wrist_angle(estimations: PoseLandmarkerResult):
     return calculate_body_angle(estimations, [ Landmark.LEFT_ELBOW, Landmark.LEFT_WRIST, Landmark.LEFT_INDEX ])
+
+def classify_phase(pos, vel, concentric):
+    pos, vel = np.asarray(pos, dtype=float), np.asarray(vel, dtype=float)
+    thr = STILL_FRAC * np.nanmax(np.abs(vel))
+    rising, falling = vel > thr, vel < -thr
+    still = ~(rising | falling)
+
+    codes = np.full(len(vel), OTHER)
+    if concentric == "increasing":
+        codes[rising], codes[falling] = CONCENTRIC, ECCENTRIC
+    else:
+        codes[falling], codes[rising] = CONCENTRIC, ECCENTRIC
+
+    # lockout = still AND sitting at the end of the concentric direction
+    # (top of the angle range if the concentric part increases it, bottom if it decreases it)
+    norm = (pos - np.nanmin(pos)) / (np.nanmax(pos) - np.nanmin(pos) + 1e-9)
+    at_lockout = norm > 1 - LOCKOUT_ZONE if concentric == "increasing" else norm < LOCKOUT_ZONE
+    codes[still & at_lockout] = STATIC
+
+    # absorb very short runs into the previous phase
+    start = 0
+    for i in range(1, len(codes) + 1):
+        if i == len(codes) or codes[i] != codes[start]:
+            if i - start < MIN_LEN and start > 0:
+                codes[start:i] = codes[start - 1]
+            start = i
+    return codes
+
+def get_current_phase(exercise, metrics):
+    # exercises not in PHASE_MAP fall back to vertical hand displacement (y points down, so up = decreasing)
+    joint, concentric = PHASE_MAP.get(
+        exercise.lower().replace("-", " ").replace("_", " "), (None, "decreasing")
+    )
+
+    pos = metrics["angular_distances"][joint] if joint else metrics["displacement"]
+    vel = metrics["angular_velocities"][joint] if joint else metrics["velocity"]
+    return [PHASE_NAMES[c] for c in classify_phase(pos, vel, concentric)]
+     

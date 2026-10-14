@@ -9,6 +9,7 @@ from PIL import Image, ImageTk
 from .videosource import VideoSource, VideoCaptureListeners
 from .strategies import EstimationStrategyManager, PoseEstimationStrategies
 from .metrics.metrics_manager import MetricsManager
+from .utils.biomechanics import get_current_phase
 
 class GUI(tk.Tk):
 
@@ -196,8 +197,11 @@ class GUI(tk.Tk):
             estimated_frame, estimation = self._estimated_frames[idx]
             history = metrics_manager.get_metrics(estimated_frame, estimation, timestamp)
             metrics_manager.plot_metrics(history)
-
-            frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)
+            metrics_manager.draw_current_lifting_phase(
+                estimated_frame,
+                metrics_manager.get_current_lifting_phase(history, "deadlift")
+            )
+            frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)            
         self._render_frame(frame)
 
         if self.video_source.source_fps:

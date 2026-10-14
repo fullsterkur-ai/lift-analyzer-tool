@@ -3,8 +3,6 @@ from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerResult
 
 from .math import get_angle
 
-from enum import IntEnum
-
 class Landmark(IntEnum):
     NOSE = 0
     LEFT_EYE_INNER = 1

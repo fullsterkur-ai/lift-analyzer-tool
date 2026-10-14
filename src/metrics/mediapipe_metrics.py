@@ -90,8 +90,8 @@ class MediapipeMetrics(BaseMetrics):
             "angular_distances": {
                 "hip": remove_jitters(smooth(self.history["angular_distances"]["hip"])),
                 "knee": remove_jitters(smooth(self.history["angular_distances"]["knee"])),
-                "ankle": remove_jitters(smooth(self.history["angular_distances"]["ankle"])),
-                "wrist": remove_jitters(smooth(self.history["angular_distances"]["wrist"])),
+                # "ankle": remove_jitters(smooth(self.history["angular_distances"]["ankle"])),
+                # "wrist": remove_jitters(smooth(self.history["angular_distances"]["wrist"])),
                 "elbow": remove_jitters(smooth(self.history["angular_distances"]["elbow"])),
                 "shoulder": remove_jitters(smooth(self.history["angular_distances"]["shoulder"])),
             }
@@ -100,8 +100,8 @@ class MediapipeMetrics(BaseMetrics):
         history["angular_velocities"] = {
             "hip": get_velocity(history["angular_distances"]["hip"], t),
             "knee": get_velocity(history["angular_distances"]["knee"], t),
-            "ankle": get_velocity(history["angular_distances"]["ankle"], t),
-            "wrist": get_velocity(history["angular_distances"]["wrist"], t),
+            # "ankle": get_velocity(history["angular_distances"]["ankle"], t),
+            # "wrist": get_velocity(history["angular_distances"]["wrist"], t),
             "elbow": get_velocity(history["angular_distances"]["elbow"], t),
             "shoulder": get_velocity(history["angular_distances"]["shoulder"], t),
         }
@@ -134,8 +134,8 @@ class MediapipeMetrics(BaseMetrics):
 
         self.ax_theta.plot(t, metrics["angular_distances"]["hip"], label="Hip")
         self.ax_theta.plot(t, metrics["angular_distances"]["knee"], label="Knee")
-        self.ax_theta.plot(t, metrics["angular_distances"]["ankle"], label="Ankle")
-        self.ax_theta.plot(t, metrics["angular_distances"]["wrist"], label="Wrist")
+        # self.ax_theta.plot(t, metrics["angular_distances"]["ankle"], label="Ankle")
+        # self.ax_theta.plot(t, metrics["angular_distances"]["wrist"], label="Wrist")
         self.ax_theta.plot(t, metrics["angular_distances"]["elbow"], label="Elbow")
         self.ax_theta.plot(t, metrics["angular_distances"]["shoulder"], label="Shoulder")
         self.ax_theta.legend()
@@ -144,8 +144,8 @@ class MediapipeMetrics(BaseMetrics):
 
         self.ax_vtheta.plot(t, metrics["angular_velocities"]["hip"], label="Hip")
         self.ax_vtheta.plot(t, metrics["angular_velocities"]["knee"], label="Knee")
-        self.ax_vtheta.plot(t, metrics["angular_velocities"]["ankle"], label="Ankle")
-        self.ax_vtheta.plot(t, metrics["angular_velocities"]["wrist"], label="Wrist")
+        # self.ax_vtheta.plot(t, metrics["angular_velocities"]["ankle"], label="Ankle")
+        # self.ax_vtheta.plot(t, metrics["angular_velocities"]["wrist"], label="Wrist")
         self.ax_vtheta.plot(t, metrics["angular_velocities"]["elbow"], label="Elbow")
         self.ax_vtheta.plot(t, metrics["angular_velocities"]["shoulder"], label="Shoulder")
         self.ax_vtheta.axhline(0, color="gray", linewidth=0.5)

@@ -58,6 +58,7 @@ class GUI(tk.Tk):
         self.video_source: VideoSource | None = None
         self._capture_thread: threading.Thread | None = None
 
+        self._estimated_frames = []
         self._is_recording = False
         self._is_playing = False
         self._play_after_id: str | None = None
@@ -153,13 +154,25 @@ class GUI(tk.Tk):
         else:
             self._start_playback()
 
+    def _estimate_metrics(self):
+        metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
+        if not metrics_manager:
+            return
+        self.video_source.reset_playback()
+        metrics_manager.reset_metrics()
+        self._estimated_frames = []
+
+        while not self.video_source.playback_is_empty():
+            frame, timestamp, next_timestamp = self.video_source.next()
+            if self._pose_strategy_manager:
+                frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
+                self._estimated_frames.append((frame, estimations))
+
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:
             return
         
-        metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
-        metrics_manager.reset_metrics()
-
+        self._estimate_metrics()        
         self.video_source.reset_playback()
         self._is_playing = True
         self.play_pause_button.config(text="Stop")
@@ -176,13 +189,15 @@ class GUI(tk.Tk):
         
         metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
         
+        idx = self.video_source.replay_idx
         frame, timestamp, next_timestamp = self.video_source.next()
         if self._pose_strategy_manager:
-            frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
-            history = metrics_manager.get_metrics(frame, estimations, timestamp)
+            self.video_source.replay_idx
+            estimated_frame, estimation = self._estimated_frames[idx]
+            history = metrics_manager.get_metrics(estimated_frame, estimation, timestamp)
             metrics_manager.plot_metrics(history)
 
-            frame = self._pose_strategy_manager.draw_estimation(frame, estimations)
+            frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)
         self._render_frame(frame)
 
         if self.video_source.source_fps:

@@ -133,7 +133,7 @@ def classify_phase(pos, vel, concentric):
             start = i
     return codes
 
-def get_current_phase(exercise, metrics):
+def calculate_phases(exercise, metrics):
     # exercises not in PHASE_MAP fall back to vertical hand displacement (y points down, so up = decreasing)
     joint, concentric = PHASE_MAP.get(
         exercise.lower().replace("-", " ").replace("_", " "), (None, "decreasing")
@@ -143,3 +143,11 @@ def get_current_phase(exercise, metrics):
     vel = metrics["angular_velocities"][joint] if joint else metrics["velocity"]
     return [PHASE_NAMES[c] for c in classify_phase(pos, vel, concentric)]
      
+def get_rep_ranges(exercise, metrics):
+    phases = np.asarray(calculate_phases(exercise, metrics), dtype=str)
+    # figure out continuous concentric phases
+    # credits: https://stackoverflow.com/a/70396444
+    concentric = (phases == "concentric").astype(np.int8)
+    phase_diffs = np.diff(np.concatenate(([0], concentric, [0])))
+    rep_starts, rep_ends = (np.flatnonzero(phase_diffs == 1), np.flatnonzero(phase_diffs == -1))
+    return [(int(rep_starts[i]), int(rep_ends[i])) for i in range(len(rep_starts))]

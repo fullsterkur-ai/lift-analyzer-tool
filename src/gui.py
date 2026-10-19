@@ -203,6 +203,9 @@ class GUI(tk.Tk):
             )
             rep_ranges = get_rep_ranges("deadlift", history)
             metrics_manager.draw_reps(estimated_frame, history, rep_ranges)
+            metrics_manager.draw_average_velocity(frame, history, rep_ranges)
+            metrics_manager.draw_peak_velocity(frame, history, rep_ranges)
+
 
             frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)            
         self._render_frame(frame)

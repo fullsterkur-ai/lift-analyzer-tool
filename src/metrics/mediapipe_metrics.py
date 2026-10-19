@@ -1,3 +1,4 @@
+import statistics
 import cv2
 import numpy as np
 import tkinter as tk
@@ -46,11 +47,15 @@ class MediapipeMetrics(BaseMetrics):
         self.window = None
 
     def get_2d_center(self, frame: np.ndarray, estimations: PoseLandmarkerResult):
+        if len(estimations.pose_landmarks)  == 0:
+            return (0, 0, 0)
         landmarks = estimations.pose_landmarks[0]
         left_index_finger, right_index_finger = landmarks[19], landmarks[20]
         return get_center(left_index_finger, right_index_finger)
 
     def get_3d_center(self, frame: np.ndarray, estimations: PoseLandmarkerResult):
+        if len(estimations.pose_landmarks) == 0:
+            return (0, 0, 0)
         landmarks = estimations.pose_world_landmarks[0]
         left_index_finger, right_index_finger = landmarks[19], landmarks[20]
         return get_center(left_index_finger, right_index_finger)
@@ -204,4 +209,30 @@ class MediapipeMetrics(BaseMetrics):
             self.ax_vy.axvspan(tstart, tstop, color="blue", alpha=0.15)
             self.ax_theta.axvspan(tstart, tstop, color="blue", alpha=0.15)
             self.ax_vtheta.axvspan(tstart, tstop, color="blue", alpha=0.15)
+
+    def get_average_velocity(self, metrics, rep_ranges):
+        v = -metrics["velocity"]
+        if len(v) == 0 or len(rep_ranges) == 0:
+            return 0
+        velocities_per_rep = [statistics.mean(v[repr[0]:repr[1]]) for repr in rep_ranges]
+        # return the instance with highest velocity
+        return max(velocities_per_rep)
+
+    def draw_average_velocity(self, frame, metrics, rep_ranges):
+        avg_velocity = self.get_average_velocity(metrics, rep_ranges)
+        cv2.putText(frame, f"avg velocity: {avg_velocity:.2f} m/s", (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+
+
+    def get_peak_velocity(self, metrics, rep_ranges):
+        v = -metrics["velocity"]
+        if len(v) == 0 or len(rep_ranges) == 0:
+            return 0
+        velocities_per_rep = [max(v[repr[0]:repr[1]]) for repr in rep_ranges]
+        # return the instance with highest velocity
+        return max(velocities_per_rep)
+
+
+    def draw_peak_velocity(self, frame, metrics, rep_ranges):
+        peak_velocity = self.get_peak_velocity(metrics, rep_ranges)
+        cv2.putText(frame, f"peak velocity: {peak_velocity:.2f} m/s", (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
 

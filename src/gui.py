@@ -6,6 +6,7 @@ import threading
 
 from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
+from .schedule_form import ScheduleForm
 from .videosource import VideoSource, VideoCaptureListeners
 from .strategies import EstimationStrategyManager, PoseEstimationStrategies
 from .metrics.metrics_manager import MetricsManager
@@ -56,6 +57,14 @@ class GUI(tk.Tk):
         )
         self.strategy_mediapipe_button.pack(fill="both", pady=1)
 
+        ttk.Separator(self.ctrl_frame).pack(pady=5, fill="x")
+
+        self.schedule_button = ttk.Button(
+            self.ctrl_frame, text="Open schedule form", command=self._open_schedule_form
+        )
+        self.schedule_button.pack(fill="both", pady=1)
+
+        self._schedule_window: ScheduleForm | None = None
         self.video_source: VideoSource | None = None
         self._capture_thread: threading.Thread | None = None
 
@@ -155,6 +164,13 @@ class GUI(tk.Tk):
         else:
             self._start_playback()
 
+    def _open_schedule_form(self):
+        if self._schedule_window is not None and self._schedule_window.winfo_exists():
+            self._schedule_window.lift()
+            self._schedule_window.focus_force()
+            return
+        self._schedule_window = ScheduleForm(self)
+
     def _estimate_metrics(self):
         metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
         if not metrics_manager:
@@ -193,7 +209,6 @@ class GUI(tk.Tk):
         idx = self.video_source.replay_idx
         frame, timestamp, next_timestamp = self.video_source.next()
         if self._pose_strategy_manager:
-            self.video_source.replay_idx
             estimated_frame, estimation = self._estimated_frames[idx]
             history = metrics_manager.get_metrics(estimated_frame, estimation, timestamp)
             metrics_manager.plot_metrics(history)

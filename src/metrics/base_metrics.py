@@ -34,3 +34,12 @@ class BaseMetrics(ABC):
     @abstractmethod
     def reset_metrics(self):
         ...
+    
+    @abstractmethod
+    def get_current_lifting_phase(self, metrics, exercise: str, *args, **kwargs) -> str:
+        ...
+
+    @abstractmethod
+    def draw_current_lifting_phase(self, frame: np.ndarray, phase: str, *args, **kwargs):
+        ...
+    

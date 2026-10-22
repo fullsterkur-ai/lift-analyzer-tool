@@ -1,3 +1,4 @@
+import re
 import cv2
 import tkinter as tk
 import numpy as np
@@ -8,6 +9,8 @@ from PIL import Image, ImageTk
 from .videosource import VideoSource
 from .strategies.mediapipe import MediaPipeEstimationStrategy
 from .metrics.mediapipe_metrics import MediapipeMetrics
+from .estimations.max_daily import MaxDailyLinearRegressionModel, MaxDailyLogisticRegressionModel,\
+    predict_1rm_with_mvt, mvt, exclude_coldstarts
 from .utils.biomechanics import get_rep_ranges
 
 EXERCISES = [
@@ -71,9 +74,17 @@ class SetRow:
         )
         if not path:
             return
+        self.set_footage(path)
+        
+    def set_footage(self, path: str):
         self.video_path = path
         self.name_label.config(text=path.replace("\\", "/").split("/")[-1])
         self._show_thumbnail(path)
+        
+        if not self.weight_var.get():
+            match = re.search(r"\/.*\D+(\d+)kg.*\..+$", path, re.IGNORECASE)
+            if match:
+                self.weight_var.set(match.group(1))
 
     def _show_thumbnail(self, path: str):
         cap = cv2.VideoCapture(path)
@@ -117,15 +128,30 @@ class ScheduleForm(tk.Toplevel):
         self.rows_frame = ttk.Frame(main)
         self.rows_frame.pack(fill="both", expand=True)
 
-        ttk.Button(main, text="Add set", command=self.add_set).pack(anchor="w", pady=5)
-        ttk.Button(main, text="Process", command=self.process).pack(anchor="e")
+        btn_frame = ttk.Frame(main)
+        btn_frame.pack(anchor="w", fill="both")
+        ttk.Button(btn_frame, text="Add set", command=self.add_set).pack(padx=5, side="left")
+        ttk.Button(btn_frame, text="Bulk upload footage", command=self.bulk_upload_footage).pack(padx=5, side="left")
+        ttk.Button(btn_frame, text="Process", command=self.process).pack(anchor="e", padx=5, side="right")
 
         self.add_set()
 
     def add_set(self):
-        self.rows.append(
-            SetRow(self.rows_frame, len(self.rows) + 1, on_remove=self.remove_set)
+        row = SetRow(self.rows_frame, len(self.rows) + 1, on_remove=self.remove_set)
+        self.rows.append(row)
+        return row
+
+    def bulk_upload_footage(self):
+        paths = filedialog.askopenfilenames(
+            title="Select footage",
+            filetypes=[
+                ("Video files", "*.mp4 *.avi *.mov *.mkv *.wmv"),
+                ("All files", "*.*"),
+            ],
         )
+        for path in paths:
+            row = self.add_set()
+            row.set_footage(path)
 
     def remove_set(self, row: SetRow):
         row.destroy()
@@ -139,6 +165,7 @@ class ScheduleForm(tk.Toplevel):
             "sets": [row.get_data() for row in self.rows],
         }
     
+        
     def _process_video(self, path):
         source = VideoSource.from_filepicker(path)
         source.capture_video()
@@ -149,11 +176,16 @@ class ScheduleForm(tk.Toplevel):
         source.reset_playback()
         metrics.reset_metrics()
 
-        history = None
-
+        estimated = []
         while not source.playback_is_empty():
             frame, timestamp, _ = source.next()
             frame, estimations = estimation_strat.estimate(frame, timestamp // 1_000_000)
+            estimated.append((frame, estimations, timestamp))
+
+        metrics.calibrate_scale([(f, e) for f, e, _ in estimated])
+
+        history = None
+        for frame, estimations, timestamp in estimated:
             history = metrics.get_metrics(frame, estimations, timestamp)
 
         exercise = self.exercise_var.get().lower()
@@ -161,11 +193,12 @@ class ScheduleForm(tk.Toplevel):
         return {
             "average_velocity": metrics.get_average_velocity(history, rep_ranges),
             "peak_velocity": metrics.get_peak_velocity(history, rep_ranges)
-        } 
+        }
 
     def process(self):
         average_velocities = []
         peak_velocities = []
+        exercise = self.exercise_var.get()
 
         weights = list(map(lambda row: float(row.weight_var.get()), self.rows))
         for rep_row in self.rows:
@@ -173,17 +206,32 @@ class ScheduleForm(tk.Toplevel):
             average_velocities.append(processed["average_velocity"])
             peak_velocities.append(processed["peak_velocity"])
 
-        coeffs = np.polyfit(weights, average_velocities, 3)
-        p = np.poly1d(coeffs)
-
         plt.cla()
         plt.plot(weights, average_velocities, "x-", label="Average velocity")
         plt.plot(weights, peak_velocities, "x-", label="Peak velocity")
         
-        X = np.linspace(min(weights), max(weights) * 1.5, 100)
-        plt.plot(X, p(X), label="Predicted average velocities")
+        weights, average_velocities = exclude_coldstarts(weights, average_velocities)
+        _, peak_velocities = exclude_coldstarts(weights, peak_velocities)
 
-        plt.xlabel("Set")
+        X = np.linspace(min(weights), max(weights) * 1.5, 100)
+        avg_vel_linear_reg = MaxDailyLinearRegressionModel()
+        avg_vel_linear_reg.fit(weights, average_velocities, 2)
+        plt.plot(X, avg_vel_linear_reg.predict(X), label="Predicted average velocities (linear)")
+
+        peak_vel_linear_reg = MaxDailyLinearRegressionModel()
+        peak_vel_linear_reg.fit(weights, peak_velocities, 2)
+        plt.plot(X, peak_vel_linear_reg.predict(X), label="Predicted peak velocities (linear)")
+
+        one_rep_max = max(
+            predict_1rm_with_mvt(exercise, avg_vel_linear_reg.coeffs) or 0,
+            *weights
+        )
+        
+        failure_line = mvt(exercise) or 0.05
+        plt.axhline(failure_line, color="gray", linestyle=":")
+        plt.text(one_rep_max, failure_line, f"1RM: {one_rep_max:.2f}kg")
+
+        plt.xlabel("Weight (kg)")
         plt.ylabel("Velocity (m/s)")
         plt.legend()
         plt.show()

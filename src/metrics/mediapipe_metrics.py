@@ -14,8 +14,16 @@ from ..utils.biomechanics import calculate_hip_angle, calculate_knee_angle, \
 
 class MediapipeMetrics(BaseMetrics):
 
+    _CALIB_SEGMENTS = [
+        ((2, 5),   (27, 28), 0.936 - 0.039),   # eyes -> ankles
+        ((11, 12), (27, 28), 0.818 - 0.039),   # shoulders -> ankles
+    ]
+
     def __init__(self):
         super().__init__()
+        self.lifter_height_m = 2.04
+        self.px_per_m = None
+        self.frame_h = None
         self.history = {}
         self.reset_metrics()
 
@@ -36,6 +44,40 @@ class MediapipeMetrics(BaseMetrics):
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.window)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.window.protocol("WM_DELETE_WINDOW", self._on_close_metrics_window)
+
+    
+    def _span_px(self, estimations, frame_h, upper_ids, lower_ids, min_vis=0.5):
+        if len(estimations.pose_landmarks) == 0:
+            return None
+        lm = estimations.pose_landmarks[0]
+        ups  = [lm[i].y for i in upper_ids if lm[i].visibility >= min_vis]
+        lows = [lm[i].y for i in lower_ids if lm[i].visibility >= min_vis]
+        if not ups or not lows:
+            return None
+        return (sum(lows) / len(lows) - sum(ups) / len(ups)) * frame_h
+
+    def calibrate_scale(self, estimated_frames):
+        """Derive px/m from entered stature. Call once after estimating all frames."""
+        self.px_per_m = None
+        if not self.lifter_height_m or not estimated_frames:
+            return None
+
+        frame_h = estimated_frames[0][0].shape[0]
+        estimates = []
+        for upper_ids, lower_ids, fraction in self._CALIB_SEGMENTS:
+            spans = [s for s in (self._span_px(est, frame_h, upper_ids, lower_ids)
+                                 for _, est in estimated_frames)
+                     if s is not None and s > 0]
+            if len(spans) < 5:
+                continue
+            upright = float(np.percentile(spans, 95))
+            estimates.append(upright / (fraction * self.lifter_height_m))
+
+        if estimates:
+            self.px_per_m = float(np.median(estimates))
+            print(f"calibrated: {self.px_per_m:.1f} px/m "
+                  f"(H={self.lifter_height_m:.2f} m, n={len(estimates)} segments)")
+        return self.px_per_m
 
     def _on_close_metrics_window(self):
         if self.canvas is not None:
@@ -73,8 +115,10 @@ class MediapipeMetrics(BaseMetrics):
         ax.scatter(*center)
 
     def get_metrics(self, frame: np.ndarray, estimations: PoseLandmarkerResult, timestamp):
-        center = self.get_3d_center(frame, estimations)
-        self.history["displacement"].append(center)
+        self.frame_h = frame.shape[0]
+
+        self.history["displacement"].append(self.get_2d_center(frame, estimations))
+        self.history["displacement_world"].append(self.get_3d_center(frame, estimations))
         self.history["timestamps"].append(timestamp)
 
         self.history["angular_distances"]["hip"].append(calculate_hip_angle(estimations))
@@ -84,15 +128,19 @@ class MediapipeMetrics(BaseMetrics):
         self.history["angular_distances"]["elbow"].append(calculate_elbow_angle(estimations))
         self.history["angular_distances"]["shoulder"].append(calculate_shoulder_angle(estimations))
 
-
         ts = np.asarray(self.history["timestamps"], dtype=float)
         t = (ts - ts[0]) / 1_000_000_000.0
 
-        pos = np.asarray(self.history["displacement"])
+        if self.px_per_m:
+            pos = np.asarray(self.history["displacement"], dtype=float)
+            raw_y = (pos[:, 1] - pos[0, 1]) * self.frame_h / self.px_per_m
+        else:
+            pos = np.asarray(self.history["displacement_world"], dtype=float)
+            raw_y = pos[:, 1] - pos[0, 1]
 
         history = {
             "time": t,
-            "displacement": remove_jitters(smooth(pos[:, 1] - pos[0, 1])),
+            "displacement": remove_jitters(smooth(raw_y)),
             "angular_distances": {
                 "hip": remove_jitters(smooth(self.history["angular_distances"]["hip"])),
                 "knee": remove_jitters(smooth(self.history["angular_distances"]["knee"])),
@@ -100,7 +148,8 @@ class MediapipeMetrics(BaseMetrics):
                 # "wrist": remove_jitters(smooth(self.history["angular_distances"]["wrist"])),
                 "elbow": remove_jitters(smooth(self.history["angular_distances"]["elbow"])),
                 "shoulder": remove_jitters(smooth(self.history["angular_distances"]["shoulder"])),
-            }
+            },
+            "calibrated": self.px_per_m is not None,
         }
         history["velocity"] = get_velocity(history["displacement"], t)
         history["angular_velocities"] = {
@@ -165,6 +214,7 @@ class MediapipeMetrics(BaseMetrics):
     def reset_metrics(self):
         self.history = {
             "displacement": [],
+            "displacement_world": [],
             "angular_distances": {
                 "hip": [],
                 "knee": [],

@@ -185,6 +185,8 @@ class GUI(tk.Tk):
                 frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
                 self._estimated_frames.append((frame, estimations))
 
+        metrics_manager.calibrate_scale(self._estimated_frames)
+
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:
             return
@@ -208,7 +210,7 @@ class GUI(tk.Tk):
         
         idx = self.video_source.replay_idx
         frame, timestamp, next_timestamp = self.video_source.next()
-        if self._pose_strategy_manager:
+        if metrics_manager and self._pose_strategy_manager and len(self._estimated_frames) > 0:
             estimated_frame, estimation = self._estimated_frames[idx]
             history = metrics_manager.get_metrics(estimated_frame, estimation, timestamp)
             metrics_manager.plot_metrics(history)

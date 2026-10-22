@@ -6,10 +6,12 @@ import threading
 
 from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
+from .schedule_form import ScheduleForm
 from .videosource import VideoSource, VideoCaptureListeners
 from .strategies import EstimationStrategyManager, PoseEstimationStrategies
 from .metrics.metrics_manager import MetricsManager
 from .utils.biomechanics import get_rep_ranges
+from .utils.exercises import EXERCISES
 
 class GUI(tk.Tk):
 
@@ -31,6 +33,21 @@ class GUI(tk.Tk):
 
         self.ctrl_frame = ttk.Frame(self.main_frame, relief="groove", borderwidth=3, padding=5)
         self.ctrl_frame.pack(side="left", fill="both")
+
+        ttk.Label(self.ctrl_frame, text="Select exercise:").pack(fill="both")
+        self.exercise_var = tk.StringVar(value=EXERCISES[0])
+        ttk.Combobox(
+            self.ctrl_frame, textvariable=self.exercise_var, values=EXERCISES, state="readonly"
+        ).pack(fill="both", pady=5)
+
+        ttk.Label(self.ctrl_frame, text="Lifter height:").pack(fill="both")
+        self.height_var = tk.DoubleVar(value=0.0)
+
+        height_frame = ttk.Frame(self.ctrl_frame)
+        height_frame.pack(fill="both", pady=5)
+
+        ttk.Entry(height_frame, textvariable=self.height_var).pack(side="left", fill="x", expand=True)
+        ttk.Label(height_frame, text="cm").pack(side="left", padx=(5, 0))
 
         self.record_video_button = ttk.Button(
             self.ctrl_frame, text="Record video", command=self._handle_record_video
@@ -56,6 +73,14 @@ class GUI(tk.Tk):
         )
         self.strategy_mediapipe_button.pack(fill="both", pady=1)
 
+        ttk.Separator(self.ctrl_frame).pack(pady=5, fill="x")
+
+        self.schedule_button = ttk.Button(
+            self.ctrl_frame, text="Open schedule form", command=self._open_schedule_form
+        )
+        self.schedule_button.pack(fill="both", pady=1)
+
+        self._schedule_window: ScheduleForm | None = None
         self.video_source: VideoSource | None = None
         self._capture_thread: threading.Thread | None = None
 
@@ -155,6 +180,13 @@ class GUI(tk.Tk):
         else:
             self._start_playback()
 
+    def _open_schedule_form(self):
+        if self._schedule_window is not None and self._schedule_window.winfo_exists():
+            self._schedule_window.lift()
+            self._schedule_window.focus_force()
+            return
+        self._schedule_window = ScheduleForm(self)
+
     def _estimate_metrics(self):
         metrics_manager = MetricsManager.get_metrics_for(self._pose_strategy_manager.active_strategy)
         if not metrics_manager:
@@ -168,6 +200,8 @@ class GUI(tk.Tk):
             if self._pose_strategy_manager:
                 frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
                 self._estimated_frames.append((frame, estimations))
+
+        metrics_manager.calibrate_scale(self.height_var.get() / 100.0, self._estimated_frames)
 
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:
@@ -192,8 +226,7 @@ class GUI(tk.Tk):
         
         idx = self.video_source.replay_idx
         frame, timestamp, next_timestamp = self.video_source.next()
-        if self._pose_strategy_manager:
-            self.video_source.replay_idx
+        if metrics_manager and self._pose_strategy_manager and len(self._estimated_frames) > 0:
             estimated_frame, estimation = self._estimated_frames[idx]
             history = metrics_manager.get_metrics(estimated_frame, estimation, timestamp)
             metrics_manager.plot_metrics(history)
@@ -203,6 +236,9 @@ class GUI(tk.Tk):
             )
             rep_ranges = get_rep_ranges("deadlift", history)
             metrics_manager.draw_reps(estimated_frame, history, rep_ranges)
+            metrics_manager.draw_average_velocity(frame, history, rep_ranges)
+            metrics_manager.draw_peak_velocity(frame, history, rep_ranges)
+
 
             frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)            
         self._render_frame(frame)

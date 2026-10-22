@@ -75,7 +75,12 @@ class VideoSource:
                 break
 
             self.buffer.append(frame)
-            self.buffer_timestamps.append(time.monotonic_ns())
+            n = len(self.buffer) - 1
+            if self.is_file_source and self.source_fps:
+                ts = int(n * 1_000_000_000 / self.source_fps)
+            else:
+                ts = time.monotonic_ns()
+            self.buffer_timestamps.append(ts)
             if listeners and listeners.on_frame: listeners.on_frame(frame)
 
         self.cap.release()

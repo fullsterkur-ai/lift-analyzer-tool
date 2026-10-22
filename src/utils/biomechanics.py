@@ -70,6 +70,8 @@ MIN_LEN = 3           # runs shorter than this many frames get absorbed into the
 
 
 def calculate_body_angle(estimations: PoseLandmarkerResult, left_landmark_locations: list[Landmark]):
+    if len(estimations.pose_world_landmarks) == 0:
+        return 0
     landmarks = estimations.pose_world_landmarks[0]
     if not landmarks:
         return 0

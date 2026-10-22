@@ -43,3 +43,22 @@ class BaseMetrics(ABC):
     def draw_current_lifting_phase(self, frame: np.ndarray, phase: str, *args, **kwargs):
         ...
     
+    @abstractmethod
+    def draw_reps(self, frame: np.ndarray, metrics, rep_ranges):
+        ...
+
+    @abstractmethod
+    def get_average_velocity(self, metrics, rep_ranges):
+        ...
+
+    @abstractmethod
+    def get_peak_velocity(self, metrics, rep_ranges):
+        ...
+
+    @abstractmethod
+    def draw_average_velocity(self, frame: np.ndarray, metrics, rep_ranges):
+        ...
+
+    @abstractmethod
+    def draw_peak_velocity(self, frame: np.ndarray, metrics, rep_ranges):
+        ...

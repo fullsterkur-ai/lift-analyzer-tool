@@ -11,6 +11,7 @@ from .videosource import VideoSource, VideoCaptureListeners
 from .strategies import EstimationStrategyManager, PoseEstimationStrategies
 from .metrics.metrics_manager import MetricsManager
 from .utils.biomechanics import get_rep_ranges
+from .utils.exercises import EXERCISES
 
 class GUI(tk.Tk):
 
@@ -32,6 +33,21 @@ class GUI(tk.Tk):
 
         self.ctrl_frame = ttk.Frame(self.main_frame, relief="groove", borderwidth=3, padding=5)
         self.ctrl_frame.pack(side="left", fill="both")
+
+        ttk.Label(self.ctrl_frame, text="Select exercise:").pack(fill="both")
+        self.exercise_var = tk.StringVar(value=EXERCISES[0])
+        ttk.Combobox(
+            self.ctrl_frame, textvariable=self.exercise_var, values=EXERCISES, state="readonly"
+        ).pack(fill="both", pady=5)
+
+        ttk.Label(self.ctrl_frame, text="Lifter height:").pack(fill="both")
+        self.height_var = tk.DoubleVar(value=0.0)
+
+        height_frame = ttk.Frame(self.ctrl_frame)
+        height_frame.pack(fill="both", pady=5)
+
+        ttk.Entry(height_frame, textvariable=self.height_var).pack(side="left", fill="x", expand=True)
+        ttk.Label(height_frame, text="cm").pack(side="left", padx=(5, 0))
 
         self.record_video_button = ttk.Button(
             self.ctrl_frame, text="Record video", command=self._handle_record_video
@@ -185,7 +201,7 @@ class GUI(tk.Tk):
                 frame, estimations = self._pose_strategy_manager.estimate(frame, timestamp // 1_000_000)
                 self._estimated_frames.append((frame, estimations))
 
-        metrics_manager.calibrate_scale(self._estimated_frames)
+        metrics_manager.calibrate_scale(self.height_var.get() / 100.0, self._estimated_frames)
 
     def _start_playback(self):
         if not self.video_source or not self.video_source.buffer:

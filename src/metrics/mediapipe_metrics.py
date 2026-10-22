@@ -21,7 +21,7 @@ class MediapipeMetrics(BaseMetrics):
 
     def __init__(self):
         super().__init__()
-        self.lifter_height_m = 2.04
+        self.lifter_height_m = 0.0
         self.px_per_m = None
         self.frame_h = None
         self.history = {}
@@ -56,8 +56,9 @@ class MediapipeMetrics(BaseMetrics):
             return None
         return (sum(lows) / len(lows) - sum(ups) / len(ups)) * frame_h
 
-    def calibrate_scale(self, estimated_frames):
+    def calibrate_scale(self, lifter_height_m, estimated_frames):
         """Derive px/m from entered stature. Call once after estimating all frames."""
+        self.lifter_height_m = lifter_height_m
         self.px_per_m = None
         if not self.lifter_height_m or not estimated_frames:
             return None

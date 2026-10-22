@@ -12,20 +12,7 @@ from .metrics.mediapipe_metrics import MediapipeMetrics
 from .estimations.max_daily import MaxDailyLinearRegressionModel, MaxDailyLogisticRegressionModel,\
     predict_1rm_with_mvt, mvt, exclude_coldstarts
 from .utils.biomechanics import get_rep_ranges
-
-EXERCISES = [
-    "Squat",
-    "Deadlift",
-    "Bench Press",
-    "Overhead Press",
-    "Barbell Row",
-    "Pull-up",
-    "Romanian Deadlift",
-    "Front Squat",
-    "Incline Bench Press",
-    "Dip",
-]
-
+from .utils.exercises import EXERCISES
 
 class SetRow:
 
@@ -125,6 +112,11 @@ class ScheduleForm(tk.Toplevel):
             top, textvariable=self.exercise_var, values=EXERCISES, state="readonly"
         ).pack(side="left", padx=5)
 
+        self.height_var = tk.DoubleVar(value=0.0)
+        ttk.Label(top, text="cm").pack(side="right")
+        ttk.Entry(top, textvariable=self.height_var, width=8).pack(side="right", padx=5)
+        ttk.Label(top, text="Lifter height:").pack(side="right")
+
         self.rows_frame = ttk.Frame(main)
         self.rows_frame.pack(fill="both", expand=True)
 
@@ -182,7 +174,7 @@ class ScheduleForm(tk.Toplevel):
             frame, estimations = estimation_strat.estimate(frame, timestamp // 1_000_000)
             estimated.append((frame, estimations, timestamp))
 
-        metrics.calibrate_scale([(f, e) for f, e, _ in estimated])
+        metrics.calibrate_scale(self.height_var.get() / 100.0, [(f, e) for f, e, _ in estimated])
 
         history = None
         for frame, estimations, timestamp in estimated:

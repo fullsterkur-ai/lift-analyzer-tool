@@ -11,6 +11,7 @@ from .strategies.mediapipe import MediaPipeEstimationStrategy
 from .metrics.mediapipe_metrics import MediapipeMetrics
 from .estimations.max_daily import MaxDailyLinearRegressionModel, MaxDailyLogisticRegressionModel,\
     predict_1rm_with_mvt, mvt, exclude_coldstarts
+from .estimations.rpe import estimate_rpe_with_velocity
 from .utils.biomechanics import get_rep_ranges
 from .utils.exercises import EXERCISES
 
@@ -31,6 +32,10 @@ class SetRow:
         ttk.Entry(self.frame, textvariable=self.weight_var, width=8).pack(side="left")
         ttk.Label(self.frame, text="kg").pack(side="left", padx=(2, 10))
 
+        self.rpe_var = tk.StringVar(value="N/A")
+        ttk.Label(self.frame, text="RPE").pack(side="left", padx=(2, 10))
+        ttk.Entry(self.frame, textvariable=self.rpe_var, state="readonly", width=5).pack(side="left", padx=(2, 10))
+
         ttk.Button(
             self.frame, text="Upload footage", command=self._browse
         ).pack(side="left")
@@ -47,6 +52,9 @@ class SetRow:
 
     def set_number(self, number: int):
         self.number_label.config(text=f"#{number}")
+
+    def set_rpe(self, rpe: str):
+        self.rpe_var.set(rpe)
 
     def destroy(self):
         self.frame.destroy()
@@ -182,14 +190,19 @@ class ScheduleForm(tk.Toplevel):
 
         exercise = self.exercise_var.get().lower()
         rep_ranges = get_rep_ranges(exercise, history)
+        average_velocity = metrics.get_average_velocity(history, rep_ranges)
+        peak_velocity =  metrics.get_peak_velocity(history, rep_ranges)
+        rpe = estimate_rpe_with_velocity(average_velocity, peak_velocity)
         return {
-            "average_velocity": metrics.get_average_velocity(history, rep_ranges),
-            "peak_velocity": metrics.get_peak_velocity(history, rep_ranges)
+            "average_velocity": average_velocity,
+            "peak_velocity": peak_velocity,
+            "rpe": rpe
         }
 
     def process(self):
         average_velocities = []
         peak_velocities = []
+        rpes = []
         exercise = self.exercise_var.get()
 
         weights = list(map(lambda row: float(row.weight_var.get()), self.rows))
@@ -197,6 +210,7 @@ class ScheduleForm(tk.Toplevel):
             processed = self._process_video(rep_row.video_path)
             average_velocities.append(processed["average_velocity"])
             peak_velocities.append(processed["peak_velocity"])
+            rpes.append(processed["rpe"])
 
         plt.cla()
         plt.plot(weights, average_velocities, "x-", label="Average velocity")
@@ -218,6 +232,8 @@ class ScheduleForm(tk.Toplevel):
             predict_1rm_with_mvt(exercise, avg_vel_linear_reg.coeffs) or 0,
             *weights
         )
+        for i, rpe in enumerate(rpes):
+            self.rows[i].set_rpe(rpe)
         
         failure_line = mvt(exercise) or 0.05
         plt.axhline(failure_line, color="gray", linestyle=":")

@@ -239,6 +239,8 @@ class GUI(tk.Tk):
             metrics_manager.draw_average_velocity(frame, history, rep_ranges)
             metrics_manager.draw_peak_velocity(frame, history, rep_ranges)
 
+            if self.video_source.playback_is_empty():
+                metrics_manager.draw_rpe(estimated_frame, history, rep_ranges)
 
             frame = self._pose_strategy_manager.draw_estimation(estimated_frame, estimation)            
         self._render_frame(frame)

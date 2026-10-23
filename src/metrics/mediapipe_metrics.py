@@ -11,6 +11,7 @@ from ..utils.math import get_center, get_velocity, remove_jitters, smooth
 from ..utils.biomechanics import calculate_hip_angle, calculate_knee_angle, \
     calculate_ankle_angle, calculate_elbow_angle, calculate_shoulder_angle, calculate_wrist_angle, \
     calculate_phases
+from ..estimations.rpe import estimate_rpe_with_velocity
 
 class MediapipeMetrics(BaseMetrics):
 
@@ -287,3 +288,13 @@ class MediapipeMetrics(BaseMetrics):
         peak_velocity = self.get_peak_velocity(metrics, rep_ranges)
         cv2.putText(frame, f"peak velocity: {peak_velocity:.2f} m/s", (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
 
+    
+    def get_rpe(self, metrics, rep_ranges):
+        average_velocity = self.get_average_velocity(metrics, rep_ranges)
+        peak_velocity = self.get_peak_velocity(metrics, rep_ranges)
+        return estimate_rpe_with_velocity(average_velocity, peak_velocity)
+
+    def draw_rpe(self, frame, metrics, rep_ranges):
+        rpe = self.get_rpe(metrics, rep_ranges)
+        print(rpe)
+        cv2.putText(frame, f"rpe: {rpe}", (20, 170), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)

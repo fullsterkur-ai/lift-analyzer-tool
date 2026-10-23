@@ -62,3 +62,11 @@ class BaseMetrics(ABC):
     @abstractmethod
     def draw_peak_velocity(self, frame: np.ndarray, metrics, rep_ranges):
         ...
+
+    @abstractmethod
+    def get_rpe(self, metrics, rep_ranges):
+        ...
+
+    @abstractmethod
+    def draw_rpe(self, frame: np.ndarray, metrics, rep_ranges):
+        ...

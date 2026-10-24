@@ -2,8 +2,8 @@ import joblib
 import pandas as pd
 from pathlib import Path
 
-MEAN_PEAK_MODEL_PATH = Path("./assets/models/mean_peak_rpe_model.joblib")
-mean_peak_model = joblib.load(MEAN_PEAK_MODEL_PATH)
+MEAN_PEAK_MODEL_PATH = "./assets/models/mean_peak_rpe_model.joblib"
+mean_peak_model = joblib.load(((Path(__file__).parent.parent.parent) / MEAN_PEAK_MODEL_PATH).resolve())
 
 RPE = ["<5", "6", "7", "8", "9", "10"]
 
